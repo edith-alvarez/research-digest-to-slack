@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-      GH_PAT_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
-
+      BOT_TOKEN: ${{secrets.BOT_TOKEN }} // ADD YOUR SLACK BOT TOKEN HERE
+      CHANNEL_ID: ${{secrets.CHANNEL_ID }} // ADD YOUR SLACK CHANNEL ID HERE
+      PAT: ${{secrets.PAT_TOKEN }} // ADD YOUR PERSONAL ACCESS TOKEN HERE
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
