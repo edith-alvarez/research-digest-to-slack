@@ -1,0 +1,77 @@
+name: Post Research Clips to Slack
+
+on:
+  workflow_dispatch: # Manual Trigger
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  post-research-summary:
+    runs-on: ubuntu-latest
+
+    env:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+      GH_PAT_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install Node dependencies
+        run: npm install @dqbd/tiktoken
+
+      - name: Fetch and filter research articles
+        run: python scripts/rules_for_research.py  
+
+      - name: Generate Slack payload
+        run: node scripts/generate_summary.mjs data/input.json 
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Add channel ID to payloads
+        run: |
+          jq --arg channel "$SLACK_CHANNEL_ID" '. + {channel: $channel}' parent_payload.json > tmp && mv tmp parent_payload.json
+          jq --arg channel "$SLACK_CHANNEL_ID" '. + {channel: $channel}' thread_reply_payload.json > tmp && mv tmp thread_reply_payload.json
+
+      - name: Send parent Slack message
+        id: post_parent
+        run: |
+          response=$(curl -s -X POST \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @parent_payload.json \
+            https://slack.com/api/chat.postMessage)
+
+          echo "Slack API response: $response"
+          ts=$(echo "$response" | jq -r '.ts')
+          echo "thread_ts=$ts"
+          echo "thread_ts=$ts" >> $GITHUB_OUTPUT
+
+      - name: Send thread reply
+        run: |
+          jq --arg ts "${{ steps.post_parent.outputs.thread_ts }}" \
+            '. + {thread_ts: $ts}' thread_reply_payload.json > thread_with_ts.json
+
+          curl -s -X POST \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @thread_with_ts.json \
+            https://slack.com/api/chat.postMessage
